@@ -1,0 +1,385 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Docerejj Voice Drug Entry</title>
+</head>
+
+<body>
+
+    <h1>Docerejj Voice Drug Entry</h1>
+
+    <button id="startButton">🎤 Start Speaking</button>
+
+    <p><strong>You said:</strong></p>
+
+    <p id="result">Nothing yet...</p>
+
+    <div id="confirmation" style="display: none;">
+
+        <h2>Please Confirm</h2>
+
+        <p>
+            <strong>Drug:</strong>
+            <span id="confirmDrug"></span>
+        </p>
+
+        <p>
+            <strong>Price:</strong>
+            UGX <span id="confirmPrice"></span>
+        </p>
+
+        <p>
+            <strong>Stock:</strong>
+            <span id="confirmStock"></span>
+        </p>
+
+        <p id="existingDrugMessage" style="display: none; color: red;">
+            ⚠️ This drug already exists in inventory.
+        </p>
+
+        <button id="confirmButton">✅ Confirm & Save</button>
+
+        <button id="cancelButton">❌ Cancel</button>
+
+    </div>
+
+    <script>
+
+        const startButton = document.getElementById("startButton");
+        const result = document.getElementById("result");
+
+        const confirmation =
+            document.getElementById("confirmation");
+
+        const confirmDrug =
+            document.getElementById("confirmDrug");
+
+        const confirmPrice =
+            document.getElementById("confirmPrice");
+
+        const confirmStock =
+            document.getElementById("confirmStock");
+
+        const existingDrugMessage =
+            document.getElementById("existingDrugMessage");
+
+        const confirmButton =
+            document.getElementById("confirmButton");
+
+        const cancelButton =
+            document.getElementById("cancelButton");
+
+        let voiceDrugData = null;
+
+
+        // --------------------------------
+        // SPEECH RECOGNITION
+        // --------------------------------
+
+        const SpeechRecognition =
+            window.SpeechRecognition ||
+            window.webkitSpeechRecognition;
+
+
+        if (!SpeechRecognition) {
+
+            result.innerText =
+                "Speech recognition is not supported by this browser.";
+
+        } else {
+
+            const recognition =
+                new SpeechRecognition();
+
+            recognition.lang = "en-US";
+
+            recognition.continuous = false;
+
+            recognition.interimResults = false;
+
+
+            // --------------------------------
+            // START SPEAKING
+            // --------------------------------
+
+            startButton.onclick = function () {
+
+                result.innerText =
+                    "Listening... 🎤";
+
+                recognition.start();
+
+            };
+
+
+            // --------------------------------
+            // SPEECH RESULT
+            // --------------------------------
+
+            recognition.onresult = async function (event) {
+
+                const transcript =
+                    event.results[0][0].transcript;
+
+                result.innerText = transcript;
+
+
+                try {
+
+                    const token =
+                        localStorage.getItem("access_token");
+
+
+                    const response =
+                        await fetch("/drugs/voice", {
+
+                            method: "POST",
+
+                            headers: {
+
+                                "Content-Type":
+                                    "application/json",
+
+                                "Authorization":
+                                    "Bearer " + token
+
+                            },
+
+                            body: JSON.stringify({
+
+                                text: transcript
+
+                            })
+
+                        });
+
+
+                    const data =
+                        await response.json();
+
+
+                    // Show response in browser console
+                    console.log(
+                        "VOICE RESPONSE:",
+                        data
+                    );
+
+
+                    console.log(
+                        "EXISTING DRUG:",
+                        data.existing_drug
+                    );
+
+
+                    // Save the response
+                    voiceDrugData = data;
+
+
+                    // --------------------------------
+                    // CHECK IF DRUG ALREADY EXISTS
+                    // --------------------------------
+
+                    if (data.existing_drug) {
+
+                        existingDrugMessage.style.display =
+                            "block";
+
+                        confirmButton.innerText =
+                            "🔄 Update Existing Drug";
+
+                    } else {
+
+                        existingDrugMessage.style.display =
+                            "none";
+
+                        confirmButton.innerText =
+                            "✅ Confirm & Save";
+
+                    }
+
+
+                    // --------------------------------
+                    // CHECK REQUIRED INFORMATION
+                    // --------------------------------
+
+                   if (
+    data.drug_name &&
+    data.dosage &&
+    data.stock_quantity !== null
+) {
+
+                        confirmDrug.innerText =
+                            data.drug_name +
+                            " " +
+                            data.dosage;
+
+
+                        confirmPrice.innerText =
+                            data.price.toLocaleString();
+
+
+                        confirmStock.innerText =
+                            data.stock_quantity;
+
+
+                        confirmation.style.display =
+                            "block";
+
+
+                    } else {
+
+                        confirmation.style.display =
+                            "none";
+
+
+                        result.innerText =
+                            "⚠️ Some information is missing. Please say the drug name, dosage, price and stock.";
+
+                    }
+
+
+                } catch (error) {
+
+                    console.error(error);
+
+
+                    result.innerText =
+                        "❌ Could not process the voice command.";
+
+                }
+
+            };
+
+
+            // --------------------------------
+            // SPEECH ERROR
+            // --------------------------------
+
+            recognition.onerror = function (event) {
+
+                result.innerText =
+                    "Error: " + event.error;
+
+            };
+
+
+            // --------------------------------
+            // CONFIRM / SAVE BUTTON
+            // --------------------------------
+
+            confirmButton.onclick = async function () {
+
+                if (!voiceDrugData) {
+
+                    result.innerText =
+                        "⚠️ No drug information to save.";
+
+                    return;
+
+                }
+
+
+                try {
+
+                    const token =
+                        localStorage.getItem("access_token");
+
+
+                    const response =
+                        await fetch(
+                            "/drugs/voice/save",
+                            {
+
+                                method: "POST",
+
+                                headers: {
+
+                                    "Content-Type":
+                                        "application/json",
+
+                                    "Authorization":
+                                        "Bearer " + token
+
+                                },
+
+                                body: JSON.stringify({
+
+                                    text:
+                                        voiceDrugData.original_text
+
+                                })
+
+                            }
+                        );
+
+
+                    const data =
+                        await response.json();
+
+
+                    console.log(
+                        "SAVE RESPONSE:",
+                        data
+                    );
+
+
+                    if (!response.ok) {
+
+                        result.innerText =
+                            "⚠️ " +
+                            (data.detail ||
+                            "Could not save the drug.");
+
+                        return;
+
+                    }
+
+
+                    result.innerText =
+                        "✅ " + data.message;
+
+
+                    confirmation.style.display =
+                        "none";
+
+
+                    voiceDrugData = null;
+
+
+                } catch (error) {
+
+                    console.error(error);
+
+
+                    result.innerText =
+                        "❌ Could not save the drug.";
+
+                }
+
+            };
+
+
+            // --------------------------------
+            // CANCEL BUTTON
+            // --------------------------------
+
+            cancelButton.onclick = function () {
+
+                confirmation.style.display =
+                    "none";
+
+
+                voiceDrugData = null;
+
+
+                result.innerText =
+                    "❌ Cancelled. Nothing was saved.";
+
+            };
+
+        }
+
+    </script>
+
+</body>
+</html>
